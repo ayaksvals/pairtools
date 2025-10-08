@@ -1154,7 +1154,7 @@ def analyse_bytile_duplicate_stats(df_dups, tile_dup_regex=False):
 
 
 def extract_tile_info(series, regex=False):
-    """Extract the name of the tile for each read name in the series
+    r"""Extract the name of the tile for each read name in the series
     Parameters
     ----------
     series : pd.Series

@@ -12,4 +12,4 @@ CLI tools to process mapped Hi-C data
 
 __version__ = "1.1.3"
 
-# from . import lib
+from . import lib

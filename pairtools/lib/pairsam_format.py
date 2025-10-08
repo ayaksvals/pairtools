@@ -1,3 +1,5 @@
+from itertools import product
+
 PAIRSAM_FORMAT_VERSION = "1.0.0"
 
 PAIRSAM_SEP = "\t"
@@ -123,3 +125,8 @@ DTYPES_EXTRA_COLUMNS = {
     "algn_idx": int,
     "same_side_algn_count": int,
 }
+
+
+
+# all the possible alignments we can get 
+ALIGNMENT_TYPE = tuple(a + b for a, b in product(["U", "u", "m", "M", "R", "N"], repeat=2)) + ("DD", "WW", "XX", "!")
