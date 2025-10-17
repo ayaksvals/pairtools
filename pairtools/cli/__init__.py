@@ -186,20 +186,5 @@ def common_io_options(func):
 
 
 from . import (
-    dedup,
-    sort,
-    flip,
-    merge,
-    markasdup,
-    select,
-    split,
-    restrict,
-    phase,
-    parse,
-    parse2,
-    stats,
-    sample,
-    filterbycov,
-    header,
-    scaling,
+    sort_duckdb
 )

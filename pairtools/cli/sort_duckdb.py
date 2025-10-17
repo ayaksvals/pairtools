@@ -7,10 +7,12 @@ import subprocess
 import shutil
 import warnings
 
+
+
 from ..lib import fileio, pairsam_format, headerops, duckdb_utils, json_transform, csv_parquet_converter
 from . import cli, common_io_options
 
-UTIL_NAME = "pairtools_csv_to_pq_converter"
+
 
 
 @cli.command()
@@ -100,7 +102,7 @@ UTIL_NAME = "pairtools_csv_to_pq_converter"
     "otherwise.",
 )
 @common_io_options
-def sort(
+def sort_duckdb(
     pairs_path,
     output,
     c1,
@@ -125,7 +127,7 @@ def sort(
     input is decompressed by bgzip or lz4c, correspondingly. By default, the
     input is read as text from stdin.
     """
-    sort_py(
+    sort_duckdb_py(
         pairs_path,
         output,
         c1,
@@ -142,9 +144,9 @@ def sort(
     )
 
 
-def sort_py(
-    pairs_path,
-    output,
+
+def sort_duckdb_py(input_path,
+    output_path,
     c1,
     c2,
     p1,
@@ -155,79 +157,32 @@ def sort_py(
     tmpdir,
     memory,
     compress_program,
-    **kwargs,
-):
+    **kwargs):
 
-    instream = fileio.auto_open(
-        pairs_path,
-        mode="r",
-        nproc=kwargs.get("nproc_in"),
-        command=kwargs.get("cmd_in", None),
-    )
-    outstream = fileio.auto_open(
-        output,
-        mode="w",
-        nproc=kwargs.get("nproc_out"),
-        command=kwargs.get("cmd_out", None),
-    )
+    if input_path.endswith("gz") or input_path.endswith("pairs"):
+        instream = fileio.auto_open(
+            input_path,
+            mode="r",
+            nproc=kwargs.get("nproc_in", 1),
+            command=kwargs.get("cmd_in", None),
+        )
 
-    header, body_stream = headerops.get_header(instream)
-    header = headerops.append_new_pg(header, ID=UTIL_NAME, PN=UTIL_NAME)
-    header = headerops.mark_header_as_sorted(header)
+        header, body_stream = headerops.get_header(instream)
+        
+        if instream != sys.stdin:
+            instream.close()
 
-    outstream.writelines((l + "\n" for l in header))
 
-    outstream.flush()
-
-    if compress_program == "auto":
-        if shutil.which("lz4c") is not None:
-            compress_program = "lz4c"
-        else:
-            warnings.warn(
-                "lz4c is not found. Using gzip for compression of sorted chunks, "
-                "which results in a minor decrease in performance. Please install "
-                "lz4c for faster sorting."
-            )
-            compress_program = "gzip"
+    if input_path.endswith("parquet") or  input_path.endswith("pq"):
+        header=duckdb_kv_metadata_to_header(input_path, con)
+        
 
     column_names = headerops.extract_column_names(header)
-    columns = [c1, c2, p1, p2, pt] + list(extra_col)
-    # Now generating the "-k <i>,<i><mode>" expressions for all columns.
-    # If column name is in the default pairsam format and has an integer dtype there, do numerical sorting
-    cols = []
-    for col in columns:
-        colindex = int(col) if col.isnumeric() else column_names.index(col) + 1
-        cols.append(
-            f"-k {colindex},{colindex}{'n' if issubclass(pairsam_format.DTYPES_PAIRSAM.get(column_names[colindex-1], str), int) else ''}"
-        )
-    cols = " ".join(cols)
-    command = rf"""
-        /bin/bash -c 'export LC_COLLATE=C; export LANG=C; sort 
-        {cols}
-        --stable
-        --field-separator=$'\''{pairsam_format.PAIRSAM_SEP_ESCAPE}'\''
-        --parallel={nproc}
-        {f'--temporary-directory={tmpdir}' if tmpdir else ''}
-        -S {memory}
-        {f'--compress-program={compress_program}' if compress_program else ''}'
-        """.replace(
-        "\n", " "
-    )
-    with subprocess.Popen(
-        command, stdin=subprocess.PIPE, bufsize=-1, shell=True, stdout=outstream
-    ) as process:
-        stdin_wrapper = io.TextIOWrapper(process.stdin, "utf-8")
-        for line in body_stream:
-            stdin_wrapper.write(line)
-        stdin_wrapper.flush()
-        process.communicate()
+    user_columns_to_sort = [c1, c2, p1, p2, pt] + list(extra_col)
+    sort_keys=csv_parquet_converter.resolve_keys(user_columns_to_sort, column_names)
+    query=duckdb_utils.sort_query(sort_keys)
 
-    if instream != sys.stdin:
-        instream.close()
-
-    if outstream != sys.stdout:
-        outstream.close()
-
-
+    csv_parquet_converter.duckdb_read_query_write(input_path, output_path, query, tmpdir, memory, numb_threads=nproc, compress_program=compress_program)
+    
 if __name__ == "__main__":
-    sort()
+    sort_duckdb()

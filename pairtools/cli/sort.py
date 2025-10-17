@@ -171,6 +171,7 @@ def sort_py(
         command=kwargs.get("cmd_out", None),
     )
 
+    print("This is sort py")
     header, body_stream = headerops.get_header(instream)
     header = headerops.append_new_pg(header, ID=UTIL_NAME, PN=UTIL_NAME)
     header = headerops.mark_header_as_sorted(header)
